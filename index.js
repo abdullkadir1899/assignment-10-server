@@ -146,6 +146,33 @@ async function run() {
     })
 
 
+    // models delete
+    app.delete('/models/:id', async(req, res) => {
+        const id = req.params.id;
+        const { createdBy } = req.body;
+
+        const existingModel = await modelsCollection.findOne({_id: new ObjectId(id)});
+        if(existingModel && existingModel.createdBy !== createdBy){
+            return res.status(403).send({success: false, message: 'access denied: you can only delete your own models'})
+        }
+
+        const query = {_id: new ObjectId(id)};
+        
+        try{
+            const result = await modelsCollection.deleteOne(query);
+            if(result.deletedCount === 0){
+                return res.status(404).send({success: false, message: "mode not found"})
+            }
+            res.send({success: true, message: 'AI Model deleted successfully'})
+        }
+        catch(error){
+            res.status(500).send({success: false, message: 'Failed to delete model', error})
+        }
+    })
+
+
+    
+
 
 
 
