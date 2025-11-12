@@ -94,6 +94,57 @@ async function run() {
     })
 
 
+    // models/:id /get
+    app.get('/models/:id', async (req, res) => {
+        const id = req.params.id;
+        try{
+            const model = await modelsCollection.findOne({_id: new ObjectId(id) });
+            if(model){
+                res.send(model);
+            }
+            else{
+                res.status(404).send({message: 'Model not found'})
+            }
+        }
+        catch(error){
+            res.status(500).send({ message: 'Failed to fetch model details', error: error.message });
+        }
+    })
+
+
+
+    // models/id put
+    app.put('/models/:id', async (req, res) => {
+        const id = req.params.id;
+        const updatedModel = req.body;
+        const creatorEmail = updatedModel.createdBy;
+
+        const existingModel = await modelsCollection.findOne({_id: new ObjectId(id)});
+        if(existingModel && existingModel.createdBy !== creatorEmail){
+            return res.status(403).send({success: false, message: 'Access denied: you can only update your own models'})
+        }
+
+        delete updatedModel._id;
+        delete updatedModel.createdBy;
+        delete updatedModel.createAt;
+        delete updatedModel.purchased;
+
+
+        const filter = {_id: new ObjectId(id)};
+        const updateDoc = {$set: updatedModel};
+
+        try{
+            const result = await modelsCollection.updateOne(filter, updateDoc);
+            if(result.matchedCount === 0){
+                return res.status(404).send({ success: false, message: 'Model not found' });
+            }
+            res.send({ success: true, message: 'AI Model updated successfully' });
+        }
+        catch(error){
+            res.status(500).send({ success: false, message: 'Failed to update model', error: error.message });
+        }
+    })
+
 
 
 
