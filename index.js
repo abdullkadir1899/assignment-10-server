@@ -11,7 +11,6 @@ app.use(cors())
 app.use(express.json())
 
 
-console.log()
 
 const uri = `mongodb+srv://${process.env.DB_NAME}:${process.env.DB_PASSWORD}@cluster0.ziilask.mongodb.net/?appName=Cluster0`;
 
@@ -52,6 +51,8 @@ async function run() {
             if(existingUser){
                 return res.send({success: false, message: 'User already exists'})
             }
+            const result = await usersCollection.insertOne(user);
+            res.send({success: true, message: 'User saved successfully', insertedId: result.insertedId})
         }
         catch(error){
             res.status(500).send({success: false, message: 'Failed to save user', error: error.message})
@@ -62,7 +63,7 @@ async function run() {
     // models post
     app.post('/models', async(req, res) => {
         const newModel = req.body;
-        newModel.createAt = new Date();
+        newModel.createdAt = new Date();  
         newModel.purchased = 0;
         try{
             const result = await modelsCollection.insertOne(newModel);
@@ -126,7 +127,7 @@ async function run() {
 
         delete updatedModel._id;
         delete updatedModel.createdBy;
-        delete updatedModel.createAt;
+        delete updatedModel.createdAt;  
         delete updatedModel.purchased;
 
 
@@ -161,12 +162,12 @@ async function run() {
         try{
             const result = await modelsCollection.deleteOne(query);
             if(result.deletedCount === 0){
-                return res.status(404).send({success: false, message: "mode not found"})
+                return res.status(404).send({success: false, message: "Model not found"})  
             }
             res.send({success: true, message: 'AI Model deleted successfully'})
         }
         catch(error){
-            res.status(500).send({success: false, message: 'Failed to delete model', error})
+            res.status(500).send({success: false, message: 'Failed to delete model', error: error.message})  
         }
     })
 
@@ -187,7 +188,13 @@ async function run() {
 
 
     app.get('/my-purchases/:email', async(req, res) => {
-        res.send([]);
+        const email = req.params.email;  // Fixed: Added param extraction
+        try {
+            const purchases = await purchasedCollection.find({ purchasedBy: email }).toArray();  
+            res.send(purchases);
+        } catch (error) {
+            res.status(500).send({ message: 'Failed to fetch my purchases', error: error.message });  
+        }
     })
 
 
@@ -196,7 +203,7 @@ async function run() {
         try{
             const models = await modelsCollection
             .find()
-            .sort({createAt: -1})
+            .sort({createdAt: -1})  
             .limit(6)
             .toArray();
             res.send(models);
@@ -224,6 +231,8 @@ async function run() {
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
+  } catch (error) {  
+    console.error("MongoDB Connection Error:", error);
   } finally {
 
   }
