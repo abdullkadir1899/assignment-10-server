@@ -206,9 +206,21 @@ async function run() {
         }
     })
 
+    
 
-
-
+    app.post('/check-purchase-status', async (req, res) => {
+        const {userEmail, modelId} = req.body;
+        try{
+            const purchased = await purchasedCollection.findOne({
+                purchasedBy: userEmail,
+                originalModelId: new ObjectId(modelId)
+            })
+            res.send({isPurchased: !! purchased});
+        }
+        catch(error){
+            res.status(500).send({isPurchased: false})
+        }
+    })
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
