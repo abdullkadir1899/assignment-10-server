@@ -59,9 +59,43 @@ async function run() {
     })
 
 
+    // models post
+    app.post('/models', async(req, res) => {
+        const newModel = req.body;
+        newModel.createAt = new Date();
+        newModel.purchased = 0;
+        try{
+            const result = await modelsCollection.insertOne(newModel);
+            res.status(201).send({
+                success: true,
+                message: 'AI model added successfully',
+                insertedId: result.insertedId
+            });
+        }
+        catch(error){
+            res.status(500).send({
+                success: false,
+                message: 'Failed to add model',
+                error: error.message
+            })
+        }
+    });
 
 
-    
+    // models get
+    app.get('/models', async(req, res) => {
+        try{
+            const models = await modelsCollection.find().toArray();
+            res.send(models)
+        }
+        catch (error) {
+            res.status(500).send({ message: 'Failed to fetch all models', error: error.message })
+        }
+    })
+
+
+
+
 
 
     await client.db("admin").command({ ping: 1 });
