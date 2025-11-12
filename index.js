@@ -171,7 +171,41 @@ async function run() {
     })
 
 
-    
+
+    //my models page
+    app.get('/my-models/:email', async(req, res) => {
+        const email = req.params.email;
+        const query = { createdBy: email };
+        try{
+            const models = await modelsCollection.find(query).toArray();
+            res.send(models);
+        }
+        catch(error){
+            res.status(500).send({message: 'Failed to fetch my models', error: error.message})
+        }
+    })
+
+
+    app.get('/my-purchases/:email', async(req, res) => {
+        res.send([]);
+    })
+
+
+    // home page
+    app.get('/featured-models', async(req, res) => {
+        try{
+            const models = await modelsCollection
+            .find()
+            .sort({createAt: -1})
+            .limit(6)
+            .toArray();
+            res.send(models);
+        }
+        catch(error){
+            res.status(500).send({message: 'Failed to fetch featured models', error: error.message})
+        }
+    })
+
 
 
 
