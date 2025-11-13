@@ -5,12 +5,9 @@ require('dotenv').config()
 const app = express();
 const port = process.env.PORT || 3000;
 
-
 // middleware
 app.use(cors())
 app.use(express.json())
-
-
 
 const uri = `mongodb+srv://${process.env.DB_NAME}:${process.env.DB_PASSWORD}@cluster0.ziilask.mongodb.net/?appName=Cluster0`;
 
@@ -23,9 +20,6 @@ const client = new MongoClient(uri, {
   }
 });
 
-
-
-
 async function run() {
   try {
     await client.connect();
@@ -36,13 +30,12 @@ async function run() {
     const usersCollection = database.collection('users');
     const purchasedCollection = database.collection('add-data');
 
-    // rot
+    // Root route
     app.get('/', (req, res) => {
         res.send('Ai Model Inventory Manager Server is Running')
     })
 
-
-    // user
+    // User POST
     app.post('/users', async (req, res) => {
         const user = req.body;
         const query = {email: user.email};
@@ -59,12 +52,12 @@ async function run() {
         }
     })
 
-
-    // models post
+    // Models POST
     app.post('/models', async(req, res) => {
         const newModel = req.body;
         newModel.createdAt = new Date();  
         newModel.purchased = 0;
+        newModel.price = newModel.price || 0; // Default price 0
         try{
             const result = await modelsCollection.insertOne(newModel);
             res.status(201).send({
@@ -82,8 +75,7 @@ async function run() {
         }
     });
 
-
-    // models get
+    // Models GET all
     app.get('/models', async(req, res) => {
         try{
             const models = await modelsCollection.find().toArray();
@@ -94,8 +86,7 @@ async function run() {
         }
     })
 
-
-    // models/:id /get
+    // Models GET by ID
     app.get('/models/:id', async (req, res) => {
         const id = req.params.id;
         try{
@@ -112,16 +103,17 @@ async function run() {
         }
     })
 
-
-
-    // models/id put
+    // Models PUT update
     app.put('/models/:id', async (req, res) => {
         const id = req.params.id;
         const updatedModel = req.body;
-        const creatorEmail = updatedModel.createdBy;
+        const creatorEmail = updatedModel.createdBy; // From client body
 
         const existingModel = await modelsCollection.findOne({_id: new ObjectId(id)});
-        if(existingModel && existingModel.createdBy !== creatorEmail){
+        if(!existingModel){
+            return res.status(404).send({success: false, message: 'Model not found'});
+        }
+        if(existingModel.createdBy !== creatorEmail){
             return res.status(403).send({success: false, message: 'Access denied: you can only update your own models'})
         }
 
@@ -129,7 +121,6 @@ async function run() {
         delete updatedModel.createdBy;
         delete updatedModel.createdAt;  
         delete updatedModel.purchased;
-
 
         const filter = {_id: new ObjectId(id)};
         const updateDoc = {$set: updatedModel};
@@ -146,14 +137,16 @@ async function run() {
         }
     })
 
-
-    // models delete
+    // Models DELETE
     app.delete('/models/:id', async(req, res) => {
         const id = req.params.id;
-        const { createdBy } = req.body;
+        const { createdBy } = req.body; // From client body
 
         const existingModel = await modelsCollection.findOne({_id: new ObjectId(id)});
-        if(existingModel && existingModel.createdBy !== createdBy){
+        if(!existingModel){
+            return res.status(404).send({success: false, message: "Model not found"});
+        }
+        if(existingModel.createdBy !== createdBy){
             return res.status(403).send({success: false, message: 'access denied: you can only delete your own models'})
         }
 
@@ -171,9 +164,7 @@ async function run() {
         }
     })
 
-
-
-    //my models page
+    // My models GET
     app.get('/my-models/:email', async(req, res) => {
         const email = req.params.email;
         const query = { createdBy: email };
@@ -186,9 +177,9 @@ async function run() {
         }
     })
 
-
+    // My purchases GET
     app.get('/my-purchases/:email', async(req, res) => {
-        const email = req.params.email;  // Fixed: Added param extraction
+        const email = req.params.email;  
         try {
             const purchases = await purchasedCollection.find({ purchasedBy: email }).toArray();  
             res.send(purchases);
@@ -197,8 +188,7 @@ async function run() {
         }
     })
 
-
-    // home page
+    // Featured models GET
     app.get('/featured-models', async(req, res) => {
         try{
             const models = await modelsCollection
@@ -213,8 +203,7 @@ async function run() {
         }
     })
 
-    
-
+    // Check purchase status POST
     app.post('/check-purchase-status', async (req, res) => {
         const {userEmail, modelId} = req.body;
         try{
@@ -229,19 +218,47 @@ async function run() {
         }
     })
 
+    // NEW: Purchase model POST (with transaction)
+    app.post('/purchase-model/:id', async (req, res) => {
+        const id = req.params.id;
+        const { purchaserEmail, purchasedModelData } = req.body;
+        const session = client.startSession();
+        try {
+            await session.withTransaction(async () => {
+                // Insert purchase record
+                const purchase = {
+                    purchasedBy: purchaserEmail,
+                    originalModelId: new ObjectId(id),
+                    purchasedModelData: { ...purchasedModelData, creatorEmail: purchasedModelData.createdBy },
+                    purchasedAt: new Date()
+                };
+                await purchasedCollection.insertOne(purchase, { session });
+
+                // Increment purchased count in model
+                await modelsCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $inc: { purchased: 1 } },
+                    { session }
+                );
+            });
+            res.send({ success: true, message: 'Purchase successful' });
+        } catch (error) {
+            console.error('Purchase error:', error);
+            res.status(500).send({ success: false, message: error.message });
+        } finally {
+            await session.endSession();
+        }
+    });
+
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } catch (error) {  
     console.error("MongoDB Connection Error:", error);
   } finally {
-
+    // No close here, keep connection open
   }
 }
 run().catch(console.dir);
-
-
-
-
 
 app.listen(port, () => {
     console.log(`AI Model Inventory Manager server listening on port ${port}`)
