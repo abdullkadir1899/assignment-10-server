@@ -263,3 +263,6 @@ run().catch(console.dir);
 app.listen(port, () => {
     console.log(`AI Model Inventory Manager server listening on port ${port}`)
 })
+
+
+module.exports = app;
